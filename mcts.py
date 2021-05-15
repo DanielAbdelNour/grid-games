@@ -9,7 +9,7 @@ from copy import deepcopy
 
 #%%
 class Node:
-    def __init__(self, state, parent=None, children=[], player=1):
+    def __init__(self, state, parent=None, children=[], player=1, chosen_action=None):
         self.id = id(self)
         self.state = state
         self.parent = parent
@@ -23,6 +23,8 @@ class Node:
         self.value_sum = 0
         self.ucb1_score = np.inf
 
+        self.chosen_action = chosen_action
+
     def add_child(self, node):
         self.children = np.append(self.children, node)
 
@@ -35,6 +37,7 @@ class Node:
         return str({
             'id': self.id,
             'player': self.player,
+            'chosen_action': self.chosen_action,
             'visit_count': self.visit_count,
             'value_sum': self.value_sum,
             'ucb1_score': self.ucb1_score
@@ -48,7 +51,7 @@ class Node:
         eb[bb.nonzero()] = 4
         eb[fb.nonzero()] = 5
         plt.imshow(eb, cmap=cm, vmin=0, vmax=len(cm.colors))
-
+        
 #%%
 def UCB1(value, c, N, n):
     if n == 0:
@@ -65,8 +68,9 @@ minimiser_id = 2
 
 # expand the tree on init
 for i, a in enumerate(possible_actions):
-    _board_state = b.step([(1, a), (2, BMBoard.Actions.NONE.value)], True, *board_state[:-1])
-    new_node = Node(_board_state, root, [], 1)
+    min_max_action = [(1, a), (2, BMBoard.Actions.NONE.value)]
+    _board_state = b.step(min_max_action, True, *board_state[:-1])
+    new_node = Node(_board_state, root, [], 1, min_max_action)
     root.add_child(new_node)
 
 # start at the root node
@@ -75,7 +79,7 @@ current_node = root
 # keep track of current maximiser
 current_player = maximiser_id
 
-for i in range(10000):
+for i in range(1000):
     current_node = root
     
     '''selection'''
@@ -85,14 +89,15 @@ for i in range(10000):
     # check if no children have been visited
     if np.all(visits == 0):
         # select a random child
-        current_node = np.random.choice(current_node.children)
+        current_node = np.random.choice([c for c in current_node.children if c.is_terminal == False])
     else:
         # select the child with highest UCB1 score
         has_children = True
         while has_children == True:
-            child_scores = np.array([cn.ucb1_score for cn in current_node.children], dtype=np.float)
-            # change current node to child with highest ucb1
-            current_node = current_node.children[np.argmax(child_scores)]
+            # change current node to child with highest ucb1 that isn't terminal
+            non_terminal_children = [c for c in current_node.children if c.is_terminal == False]
+            child_scores = np.array([cn.ucb1_score for cn in non_terminal_children], dtype=np.float)
+            current_node = non_terminal_children[np.argmax(child_scores)]
             has_children = len(current_node.children) > 0
 
 
@@ -109,11 +114,16 @@ for i in range(10000):
                 min_max_action = [(1, BMBoard.Actions.NONE.value), (2, a)]
 
             _board_state = b.step(min_max_action, True, *board_state[:-1])
-            new_node = Node(_board_state, current_node, [], current_player)
+            new_node = Node(_board_state, current_node, [], current_player, min_max_action)
+            # set new node to terminal if the state is done
+            if _board_state[-1] == True:
+                new_node.is_terminal = True
+            
+            # add new node as child of current node
             current_node.add_child(new_node)
 
-        # select a new child to be current for simulation
-        current_node = np.random.choice(current_node.children)
+        # select a new child to be current for simulation from valid children (non terminal)
+        current_node = np.random.choice([c for c in current_node.children if c.is_terminal == False])
 
 
     '''simulate'''
@@ -139,7 +149,7 @@ for i in range(10000):
         
 
     '''backprop'''
-    # update visit_count and value_sum up chain
+    # update n_visits and t_reward up chain
     next_node = current_node
     while next_node != None:
         # switch reward based on node player
@@ -156,3 +166,5 @@ for i in range(10000):
 
     root.ucb1_score = UCB1(root.value(), 2, root.visit_count, root.visit_count)
     update_ucb(root)  
+
+    #print(np.round((i/1000) * 100))
