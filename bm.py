@@ -132,6 +132,10 @@ class BMBoard:
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
 
+    def board_state(self):
+        return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
+
+
     def add_bomb_to_board(self, board, pos, meta):
         board[pos[0], pos[1]] = self.Entities.BOMB.value
         meta = np.append(meta, [pos, self._bomb_life])
