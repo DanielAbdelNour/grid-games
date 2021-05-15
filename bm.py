@@ -1,6 +1,10 @@
 import numpy as np
 from enum import Enum
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from copy import deepcopy
+import time
+from IPython import display
 
 class BMBoard:
     def __init__(self, board_shape=(9,9)):
@@ -22,11 +26,13 @@ class BMBoard:
         self.ammo_board = None
         self.powerup_board = None
 
+        self._n_blocks = 20
+
         self._bomb_life = 4
         self._fire_life = 2
 
         self._start_health = 3
-        self._start_ammo = 3
+        self._start_ammo = 3000
         self._start_power = 2
 
         self._players = [self.Entities.P1.value, self.Entities.P2.value]
@@ -49,8 +55,8 @@ class BMBoard:
         LEFT = 2
         RIGHT = 3
         BOMB = 4
-        DETONATE = 5
-
+        #DETONATE = 5
+        NONE = 6
 
     class Entities(Enum):
         FLOOR = 0
@@ -66,8 +72,21 @@ class BMBoard:
     def __repr__(self):
         return str(self.board + self.bombs_board + self.fire_board)
 
-    def render(self):
-        plt.imshow(self.board + self.bombs_board + self.fire_board)
+    def render(self, boards=None):
+        cm = ListedColormap(["grey", "blue", "red", "saddlebrown", "black", "yellow"])
+
+        if boards == None:
+            eb = self.board.copy()
+            bb = self.bombs_board.copy()
+            fb = self.fire_board.copy()
+        else:
+            eb = boards[0].copy()
+            bb = boards[1].copy()
+            fb = boards[2].copy()
+
+        eb[bb.nonzero()] = 4
+        eb[fb.nonzero()] = 5
+        plt.imshow(eb, cmap=cm, vmin=0, vmax=len(cm.colors))
 
 
     def restart_board(self):
@@ -86,8 +105,7 @@ class BMBoard:
         possible_block_pos = np.argwhere(np.isin(self.board, [self.Entities.P1.value, self.Entities.P2.value]) == False)
 
         # choose and place N possible block positions
-        n_blocks = 4
-        block_pos_idxs = np.random.choice(np.arange(0, len(possible_block_pos)), n_blocks)
+        block_pos_idxs = np.random.choice(np.arange(0, len(possible_block_pos)), self._n_blocks)
         for bpi in block_pos_idxs:
             bp = possible_block_pos[bpi]
             bpy, bpx = bp
@@ -111,7 +129,7 @@ class BMBoard:
 
         self.done = False
 
-        return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta
+        return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
 
     def add_bomb_to_board(self, board, pos, meta):
@@ -213,12 +231,16 @@ class BMBoard:
             p_ammo = player_meta[player_meta[:, 0] == p, 2][0]
             p_currpos = np.argwhere(board == p)[0]
 
+            # handle none
+            if a == self.Actions.NONE.value:
+                continue
+
             # handle bombs
             if a == self.Actions.BOMB.value:
                 if p_ammo <= 0:
-                    break
+                    continue
                 bombs_board, player_meta = self.add_bomb(bombs_board, p_currpos, board, player_meta)
-                break
+                continue
             
             # bounded proposed new pos
             p_newpos = np.clip(p_currpos + self.action_direction[a], a_min=0, a_max=self.board_width-1)
