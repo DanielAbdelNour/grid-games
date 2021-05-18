@@ -131,7 +131,7 @@ class BMBoard:
 
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
-
+    @property
     def board_state(self):
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
