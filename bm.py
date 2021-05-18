@@ -7,7 +7,7 @@ import time
 from IPython import display
 
 class BMBoard:
-    def __init__(self, board_width=9):
+    def __init__(self, board_width=9, start_health=3, start_ammo=3):
         self.board_width = board_width
         self.board_shape = (self.board_width, self.board_width)
         self.action_direction = [
@@ -30,8 +30,8 @@ class BMBoard:
         self._bomb_life = 4
         self._fire_life = 2
 
-        self._start_health = 1
-        self._start_ammo = 3
+        self._start_health = start_health
+        self._start_ammo = start_ammo
         self._start_power = 2
 
         self._players = [self.Entities.P1.value, self.Entities.P2.value]
@@ -131,7 +131,7 @@ class BMBoard:
 
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
-
+    @property
     def board_state(self):
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
@@ -167,10 +167,6 @@ class BMBoard:
         actions.append(self.Actions.NONE.value)
 
         return actions
-
-            
-
-
 
     
     def add_bomb_to_board(self, board, pos, meta):
@@ -331,7 +327,7 @@ class BMBoard:
             fire_board[afy, afx] -= 1
 
         # check if any players have lost
-        dead_players = player_meta[player_meta[:, 1] == 0, 0]
+        dead_players = player_meta[player_meta[:, 1] <= 0, 0]
         if len(dead_players) > 0:
             done = True
 

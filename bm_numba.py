@@ -41,6 +41,20 @@ def np_clip(a, a_min, a_max, out=None):
         return out
     return np_clip_impl
 
+@numba.extending.overload(np.isin)
+def np_isin(a, b):
+    def np_isin_impl(a, b):
+        shape = a.shape
+        a = a.ravel()
+        n = len(a)
+        result = np.full(n, False)
+        set_b = set(b)
+        for i in range(n):
+            if a[i] in set_b:
+                result[i] = True
+        return result.reshape(shape)
+    return np_isin_impl
+
 spec = [
     ('board_width', numba.int32),
     ('board_shape', numba.int32[:]),
@@ -75,7 +89,7 @@ spec = [
 
 @numba.experimental.jitclass(spec)
 class BMBoard:
-    def __init__(self, board_width=9):
+    def __init__(self, board_width=9, start_health=3, start_ammo=3):
         self.board_width = board_width
         self.board_shape = np.array([self.board_width, self.board_width], dtype=np.int32)
         self.action_direction = np.array([
@@ -98,8 +112,8 @@ class BMBoard:
         self._bomb_life = 4
         self._fire_life = 2
 
-        self._start_health = 3
-        self._start_ammo = 3000
+        self._start_health = start_health
+        self._start_ammo = start_ammo
         self._start_power = 2
 
         self._players = np.array([1, 2], dtype=np.int32)
@@ -133,20 +147,10 @@ class BMBoard:
 
 
     def render(self, boards=None):
-        cm = ListedColormap(["grey", "blue", "red", "saddlebrown", "black", "yellow"])
-
         if boards == None:
-            eb = self.board.copy()
-            bb = self.bombs_board.copy()
-            fb = self.fire_board.copy()
+            return self.board + self.fire_board + self.bombs_board
         else:
-            eb = boards[0].copy()
-            bb = boards[1].copy()
-            fb = boards[2].copy()
-
-        eb[bb.nonzero()] = 4
-        eb[fb.nonzero()] = 5
-        plt.imshow(eb, cmap=cm, vmin=0, vmax=len(cm.colors))
+            return boards[0] + boards[1] + boards[2]
 
     def restart_board(self):
         '''
@@ -190,10 +194,41 @@ class BMBoard:
 
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
-
+    @property
     def board_state(self):
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
+    
+    def valid_actions(self, player_id, board_states):
+        '''
+        returns a list of valid actions from the given board state
+        '''
+        current_board_states = board_states
+        entity_board, bombs_board, fire_board, ammo_board, powerup_board, player_meta, done = current_board_states
+        player_pos = np.argwhere(entity_board == player_id)[0]
+        player_meta_idx = np.argwhere(player_meta[:, 0] == player_id).item()
+        # check actions
+        actions = np.empty(0, dtype=np.int32)
+        for a in np.array([0,1,2,3,4,6], dtype=np.int32): # cant iteratve via Actions directly with numba
+            # direction actions
+            if np.isin(np.array([a], dtype=np.int32), np.array([Actions.UP.value, Actions.DOWN.value, Actions.LEFT.value, Actions.RIGHT.value])):
+                new_pos = player_pos + self.action_direction[a]
+                py, px = new_pos
+                # make sure new_pos is in bounds
+                valid_bounds = np.all(new_pos >= 0) and np.all(new_pos < entity_board.shape[0])
+                if valid_bounds:
+                    valid_move = entity_board[py, px] == 0 and bombs_board[py, px] == 0
+                    if valid_move:
+                        actions = np.append(actions, a)
+            # bomb and detonation and check if player has enough ammo to place bomb
+            if a in np.array([Actions.BOMB.value]):
+                py, px = player_pos
+                valid_move = bombs_board[py, px] == 0 and player_meta[player_meta_idx, 2] > 0
+                if valid_move:
+                    actions = np.append(actions, a)
+        
+        actions = np.append(actions, Actions.NONE.value)
 
+        return actions
 
     def add_bomb_to_board(self, board, pos, meta):
         board[pos[0], pos[1]] = Entities.BOMB.value
@@ -362,7 +397,7 @@ class BMBoard:
             fire_board[afy, afx] -= 1
 
         # check if any players have lost
-        dead_players = player_meta[player_meta[:, 1] == 0, 0]
+        dead_players = player_meta[player_meta[:, 1] <= 0, 0]
         if len(dead_players) > 0:
             done = True
 
