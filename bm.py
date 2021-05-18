@@ -30,8 +30,8 @@ class BMBoard:
         self._bomb_life = 4
         self._fire_life = 2
 
-        self._start_health = 3
-        self._start_ammo = 3000
+        self._start_health = 1
+        self._start_ammo = 3
         self._start_power = 2
 
         self._players = [self.Entities.P1.value, self.Entities.P2.value]
@@ -136,6 +136,43 @@ class BMBoard:
         return self.board, self.bombs_board, self.fire_board, self.ammo_board, self.powerup_board, self.player_meta, self.done
 
 
+    def valid_actions(self, player_id, board_states):
+        '''
+        returns a list of valid actions from the given board state
+        '''
+        current_board_states = board_states
+        entity_board, bombs_board, fire_board, ammo_board, powerup_board, player_meta, done = current_board_states
+        player_pos = np.argwhere(entity_board == player_id)[0]
+        player_meta_idx = np.argwhere(player_meta[:, 0] == player_id).item()
+        # check actions
+        actions = []
+        for a in list(self.Actions):
+            # direction actions
+            if a.value in [self.Actions.UP.value, self.Actions.DOWN.value, self.Actions.LEFT.value,self. Actions.RIGHT.value]:
+                new_pos = player_pos + self.action_direction[a.value]
+                py, px = new_pos
+                # make sure new_pos is in bounds
+                valid_bounds = np.all(new_pos >= 0) and np.all(new_pos < entity_board.shape[0])
+                if valid_bounds:
+                    valid_move = entity_board[py, px] == 0 and bombs_board[py, px] == 0
+                    if valid_move:
+                        actions.append(a.value)
+            # bomb and detonation and check if player has enough ammo to place bomb
+            if a.value in [self.Actions.BOMB.value]:
+                py, px = player_pos
+                valid_move = bombs_board[py, px] == 0 and player_meta[player_meta_idx, 2] > 0
+                if valid_move:
+                    actions.append(a.value)
+        
+        actions.append(self.Actions.NONE.value)
+
+        return actions
+
+            
+
+
+
+    
     def add_bomb_to_board(self, board, pos, meta):
         board[pos[0], pos[1]] = self.Entities.BOMB.value
         meta = np.append(meta, [pos, self._bomb_life])

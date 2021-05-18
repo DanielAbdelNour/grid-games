@@ -13,11 +13,11 @@ from copy import deepcopy
 
 #%%
 class Node:
-    def __init__(self, state, parent=None, children=[], player=1, chosen_action=None):
+    def __init__(self, state, parent=None, player=1, chosen_action=None):
         self.id = id(self)
         self.state = state
         self.parent = parent
-        self.children = children
+        self.children = []
         self.is_terminal = False
         self.player = player # id of the player (1 or 2)
 
@@ -28,6 +28,7 @@ class Node:
         self.ucb1_score = np.inf
 
         self.chosen_action = chosen_action
+        self.is_root = True if self.parent == None else False
 
     def add_child(self, node):
         self.children = np.append(self.children, node)
@@ -181,14 +182,102 @@ def run(game, n=1000, C=1):
     best_action = root.children[np.argmax([c.ucb1_score for c in root.children])].chosen_action[0][1]
     return best_action, root
 
+#%%
+def run2(game, n=1000, C=1):
+    board_state = game.board_state()
+    root = Node(board_state)
+    has_children = False
+    maximiser_id = 1
+    minimiser_id = 2
+
+    for i in range(100):
+        current_node = root
+        # select best path
+        has_children = len(current_node.children) > 0
+        while has_children:
+            # ensure current nodes has had all valid actions expanded
+            valid_actions = game.valid_actions(current_node.player, current_node.state)
+            explored_actions = [n.chosen_action for n in current_node.children]
+            # do not continue selection if there are unexplored actions
+            if np.all(np.isin(np.array(valid_actions), np.array(explored_actions))) == False:
+                break
+            # do not continue if all children are terminal
+            non_terminal_children = [c for c in current_node.children if c.is_terminal == False]
+            if len(non_terminal_children) == 0:
+                break
+            child_scores = np.array([cn.ucb1_score for cn in non_terminal_children], dtype=np.float64)
+            current_node = non_terminal_children[np.argmax(child_scores)]
+            has_children = len(current_node.children) > 0
+
+        # expand unboserved
+        # who is about to play
+        if current_node.is_root:
+            player = maximiser_id
+        else:
+            player = minimiser_id if current_node.player == maximiser_id else maximiser_id
+        valid_actions = np.array(game.valid_actions(player, current_node.state))
+        explored_actions = np.array([n.chosen_action for n in current_node.children])
+        unexplored_action_idx = np.argwhere(np.isin(valid_actions, explored_actions) == False).ravel()
+        if len(unexplored_action_idx) == 0:
+            current_node = np.random.choice(current_node.children)
+        else:
+            rand_action = np.random.choice(valid_actions[unexplored_action_idx])
+            if player == maximiser_id:
+                min_max_action = [(1, rand_action), (2, BMBoard.Actions.NONE.value)]
+            else:
+                min_max_action = [(1, BMBoard.Actions.NONE.value), (2, rand_action)]
+            _board_state = game.step(min_max_action, True, *current_node.state[:-1])
+            new_node = Node(_board_state, current_node, player, rand_action)
+            if _board_state[-1] == True:
+                new_node.is_terminal = True
+            current_node.add_child(new_node)
+            current_node = new_node
+
+
+        # simulate
+        r_board_state = deepcopy(current_node.state)
+        r_done = r_board_state[-1]
+        while r_done == False:
+            # random actions
+            ra1 = np.random.choice(game.valid_actions(1, r_board_state))
+            ra2 = np.random.choice(game.valid_actions(2, r_board_state))
+            r_board_state = game.step([(1, ra1), (2, ra2)], True, *r_board_state[:-1])
+            r_done = r_board_state[-1]
+
+        # get the score after rollout
+        r_meta = r_board_state[-2]
+        winner = r_meta[r_meta[:, 1] != 0, 0].ravel()
+        if len(winner) == 0:
+            # tied
+            reward = 0.5
+        elif winner[0] == player:
+            reward = 1
+        else:
+            reward = -1
+
+        # backprop
+        # update n_visits and t_reward up chain
+        next_node = current_node
+        while next_node != None:
+            # switch reward based on node player
+            next_node.visit_count += 1
+            next_node.value_sum += reward * 1 if next_node.player == maximiser_id else -1
+            next_node = next_node.parent
+
+        #root.ucb1_score = UCB1(root.value(), 2, root.visit_count, root.visit_count)
+        update_ucb(root, N = root.visit_count, C=C)  
+
+    #best_action = root.children[np.argmax([c.visit_count for c in root.children])].chosen_action[0][1]
+    best_action = root.children[np.argmax([c.ucb1_score for c in root.children])].chosen_action
+    return best_action, root
 
 #%%
 b = BMBoard(3)
 b.render()
 
 # %%
-ba, root_node = run(b, 1000, C=1)
-b.step([(1, ba), (2, BMBoard.Actions.RIGHT.value)])
+ba, root_node = run2(b, 50000, C=2)
+b.step([(1, ba), (2, BMBoard.Actions.DOWN.value)])
 print(b.player_meta)
 b.render()
 
@@ -222,3 +311,4 @@ nt.from_nx(G)
 nt.show_buttons()
 nt.toggle_physics(False)
 nt.save_graph('graph.html')
+# %%
