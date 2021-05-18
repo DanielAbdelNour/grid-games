@@ -31,7 +31,7 @@ def np_clip(a, a_min, a_max, out=None):
     def np_clip_impl(a, a_min, a_max, out=None):
         if out is None:
             out = np.empty_like(a)
-        for i in range(len(a)):
+        for i in np.arange(len(a)):
             if a[i] < a_min:
                 out[i] = a_min
             elif a[i] > a_max:
@@ -49,7 +49,7 @@ def np_isin(a, b):
         n = len(a)
         result = np.full(n, False)
         set_b = set(b)
-        for i in range(n):
+        for i in np.arange(n):
             if a[i] in set_b:
                 result[i] = True
         return result.reshape(shape)
@@ -88,7 +88,7 @@ spec = [
 ]
 
 @numba.experimental.jitclass(spec)
-class BMBoard:
+class BMBoardNumba:
     def __init__(self, board_width=9, start_health=3, start_ammo=3):
         self.board_width = board_width
         self.board_shape = np.array([self.board_width, self.board_width], dtype=np.int32)
@@ -134,16 +134,16 @@ class BMBoard:
         return str(self.board + self.bombs_board + self.fire_board)
 
 
-    def isin_nb(self, a, b):
-        shape = a.shape
-        a = a.ravel()
-        n = len(a)
-        result = np.full(n, False)
-        set_b = set(b)
-        for i in range(n):
-            if a[i] in set_b:
-                result[i] = True
-        return result.reshape(shape)
+    # def isin_nb(self, a, b):
+    #     shape = a.shape
+    #     a = a.ravel()
+    #     n = len(a)
+    #     result = np.full(n, False)
+    #     set_b = set(b)
+    #     for i in range(n):
+    #         if a[i] in set_b:
+    #             result[i] = True
+    #     return result.reshape(shape)
 
 
     def render(self, boards=None):
@@ -165,7 +165,7 @@ class BMBoard:
         self.board[self.p2pos[0], self.p2pos[1]] = Entities.P2.value
 
         # possible block positions
-        possible_block_pos = np.argwhere(self.isin_nb(self.board, np.array([Entities.P1.value, Entities.P2.value], dtype=np.int32)) == np.array(False, dtype=np.bool_))
+        possible_block_pos = np.argwhere(np.isin(self.board, np.array([Entities.P1.value, Entities.P2.value], dtype=np.int32)) == np.array(False, dtype=np.bool_))
 
         # choose and place N possible block positions
         block_pos_idxs = np.random.choice(np.arange(0, len(possible_block_pos)), self._n_blocks)
@@ -264,7 +264,7 @@ class BMBoard:
         board[y, x] = self._bomb_life
 
         # decrease ammo
-        if self.isin_nb(np.array(entity_board[y, x], dtype=np.int32), self._players):
+        if np.isin(np.array(entity_board[y, x], dtype=np.int32), self._players):
             # which idx in player meta?
             p = entity_board[y, x]
             pm_idx = np.argwhere(player_meta[:,0] == p).ravel()[0]
@@ -289,7 +289,7 @@ class BMBoard:
         # add fire entity in 4 directions from the center
         for dir in self.action_direction:
             # propagate the fire radius based on power
-            for p in range(1, power):
+            for p in np.arange(1, power):
                 dy, dx = np.clip(pos + dir*p, a_min=0, a_max=self.board_width-1)
                 # stop propagating if hit block
                 if entity_board[dy, dx] == Entities.BLOCK.value:
@@ -387,7 +387,7 @@ class BMBoard:
             afy, afx = af
 
             # apply damage to players
-            if self.isin_nb(np.array(board[afy, afx], dtype=np.int32), self._players):
+            if np.isin(np.array(board[afy, afx], dtype=np.int32), self._players):
                 # which idx in player meta?
                 p = board[afy, afx]
                 pm_idx = np.argwhere(player_meta[:,0] == p).ravel()[0]

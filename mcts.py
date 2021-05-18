@@ -119,14 +119,28 @@ def run(game, root, n=1000):
 #%%
 
 game = BMBoard(4, 1, 1000)
-#game.render()
+game.render()
 
 #%%
-for i in range(1):
-    root = Node(game.board_state)
-    best_action = run(game, root, 1000)
-    game.step([(1, best_action), (2, BMBoard.Actions.DOWN.value)])  
-    #print(game.board_state[-2])
-    #game.render()
+
+root = Node(game.board_state)
+best_action = run(game, root, 1000)
+game.step([(1, best_action), (2, BMBoard.Actions.LEFT.value)])  
+#print(game.board_state[-2])
+game.render()
 
 
+#%%
+import time
+import numpy as np
+from bm_numba import BMBoard as BMBoard_Numba
+
+#%%
+game = BMBoard_Numba(4, 1, 1000)
+game.render()
+#%%
+root = Node(game.board_state)
+best_action = run(game, root, 1000)
+game.step(np.array([[1, best_action], [2, BMBoard.Actions.LEFT.value]], dtype=np.int32))  
+#print(game.board_state[-2])
+game.render()
