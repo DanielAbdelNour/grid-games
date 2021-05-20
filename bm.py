@@ -6,6 +6,27 @@ from copy import deepcopy
 import time
 from IPython import display
 
+
+class Actions(Enum):
+    UP = 0
+    DOWN = 1
+    LEFT = 2
+    RIGHT = 3
+    BOMB = 4
+    #DETONATE = 5
+    NONE = 6
+
+class Entities(Enum):
+    FLOOR = 0
+    P1 = 1
+    P2 = 2
+    BLOCK = 3
+    BOMB = 4
+    FIRE = 5
+    AMMO = 6
+    POWERUP = 7
+
+
 class BMBoard:
     def __init__(self, board_width=9, start_health=3, start_ammo=3):
         self.board_width = board_width
@@ -25,7 +46,7 @@ class BMBoard:
         self.ammo_board = None
         self.powerup_board = None
 
-        self._n_blocks = 20
+        self._n_blocks = (board_width**2)//2
 
         self._bomb_life = 4
         self._fire_life = 2
@@ -34,39 +55,19 @@ class BMBoard:
         self._start_ammo = start_ammo
         self._start_power = 2
 
-        self._players = [self.Entities.P1.value, self.Entities.P2.value]
-        self._tickables = [self.Entities.BOMB.value, self.Entities.FIRE.value, self.Entities.AMMO.value, self.Entities.POWERUP.value]
-        self._obstacles = [self.Entities.BLOCK.value, self.Entities.BOMB.value, self.Entities.P1.value, self.Entities.P2.value]
-        self._obtainable = [self.Entities.POWERUP.value, self.Entities.AMMO.value]
+        self._players = [Entities.P1.value, Entities.P2.value]
+        self._tickables = [Entities.BOMB.value, Entities.FIRE.value, Entities.AMMO.value, Entities.POWERUP.value]
+        self._obstacles = [Entities.BLOCK.value, Entities.BOMB.value, Entities.P1.value, Entities.P2.value]
+        self._obtainable = [Entities.POWERUP.value, Entities.AMMO.value]
 
         # player_id, health, ammo, power
         self.player_meta = np.array([
-            [self.Entities.P1.value, self._start_health, self._start_ammo, self._start_power],
-            [self.Entities.P2.value, self._start_health, self._start_ammo, self._start_power]
+            [Entities.P1.value, self._start_health, self._start_ammo, self._start_power],
+            [Entities.P2.value, self._start_health, self._start_ammo, self._start_power]
         ], dtype=np.int32)
 
         self.done = False
         self.restart_board()
-
-        
-    class Actions(Enum):
-        UP = 0
-        DOWN = 1
-        LEFT = 2
-        RIGHT = 3
-        BOMB = 4
-        #DETONATE = 5
-        NONE = 6
-
-    class Entities(Enum):
-        FLOOR = 0
-        P1 = 1
-        P2 = 2
-        BLOCK = 3
-        BOMB = 4
-        FIRE = 5
-        AMMO = 6
-        POWERUP = 7
 
 
     def __repr__(self):
@@ -98,18 +99,18 @@ class BMBoard:
         board_shape: tuple board dimensions
         '''
         self.board = np.zeros(self.board_shape, dtype=np.int32)
-        self.board[self.p1pos[0], self.p1pos[1]] = self.Entities.P1.value
-        self.board[self.p2pos[0], self.p2pos[1]] = self.Entities.P2.value
+        self.board[self.p1pos[0], self.p1pos[1]] = Entities.P1.value
+        self.board[self.p2pos[0], self.p2pos[1]] = Entities.P2.value
 
         # possible block positions
-        possible_block_pos = np.argwhere(np.isin(self.board, [self.Entities.P1.value, self.Entities.P2.value]) == False)
+        possible_block_pos = np.argwhere(np.isin(self.board, [Entities.P1.value, Entities.P2.value]) == False)
 
         # choose and place N possible block positions
         block_pos_idxs = np.random.choice(np.arange(0, len(possible_block_pos)), self._n_blocks)
         for bpi in block_pos_idxs:
             bp = possible_block_pos[bpi]
             bpy, bpx = bp
-            self.board[bpy, bpx] = self.Entities.BLOCK.value
+            self.board[bpy, bpx] = Entities.BLOCK.value
 
         # clear positions adjacent to players
         for y,x in np.array([[0,1], [1,0], [1,1]], dtype=np.int32):
@@ -123,8 +124,8 @@ class BMBoard:
 
         # player_id, health, ammo, power
         self.player_meta = np.array([
-            [self.Entities.P1.value, self._start_health, self._start_ammo, self._start_power],
-            [self.Entities.P2.value, self._start_health, self._start_ammo, self._start_power]
+            [Entities.P1.value, self._start_health, self._start_ammo, self._start_power],
+            [Entities.P2.value, self._start_health, self._start_ammo, self._start_power]
         ], dtype=np.int32)
 
         self.done = False
@@ -146,9 +147,9 @@ class BMBoard:
         player_meta_idx = np.argwhere(player_meta[:, 0] == player_id).item()
         # check actions
         actions = []
-        for a in list(self.Actions):
+        for a in list(Actions):
             # direction actions
-            if a.value in [self.Actions.UP.value, self.Actions.DOWN.value, self.Actions.LEFT.value,self. Actions.RIGHT.value]:
+            if a.value in [Actions.UP.value, Actions.DOWN.value, Actions.LEFT.value, Actions.RIGHT.value]:
                 new_pos = player_pos + self.action_direction[a.value]
                 py, px = new_pos
                 # make sure new_pos is in bounds
@@ -158,19 +159,19 @@ class BMBoard:
                     if valid_move:
                         actions.append(a.value)
             # bomb and detonation and check if player has enough ammo to place bomb
-            if a.value in [self.Actions.BOMB.value]:
+            if a.value in [Actions.BOMB.value]:
                 py, px = player_pos
                 valid_move = bombs_board[py, px] == 0 and player_meta[player_meta_idx, 2] > 0
                 if valid_move:
                     actions.append(a.value)
         
-        actions.append(self.Actions.NONE.value)
+        actions.append(Actions.NONE.value)
 
         return actions
 
     
     def add_bomb_to_board(self, board, pos, meta):
-        board[pos[0], pos[1]] = self.Entities.BOMB.value
+        board[pos[0], pos[1]] = Entities.BOMB.value
         meta = np.append(meta, [pos, self._bomb_life])
         return board, meta
 
@@ -231,7 +232,7 @@ class BMBoard:
             for p in range(1, power):
                 dy, dx = np.clip(pos + dir*p, a_min=0, a_max=self.board_width-1)
                 # stop propagating if hit block
-                if entity_board[dy, dx] == self.Entities.BLOCK.value:
+                if entity_board[dy, dx] == Entities.BLOCK.value:
                     break
                 else:
                     board[dy, dx] = self._fire_life
@@ -270,11 +271,11 @@ class BMBoard:
             p_currpos = np.argwhere(board == p)[0]
 
             # handle none
-            if a == self.Actions.NONE.value:
+            if a == Actions.NONE.value:
                 continue
 
             # handle bombs
-            if a == self.Actions.BOMB.value:
+            if a == Actions.BOMB.value:
                 if p_ammo <= 0:
                     continue
                 bombs_board, player_meta = self.add_bomb(bombs_board, p_currpos, board, player_meta)

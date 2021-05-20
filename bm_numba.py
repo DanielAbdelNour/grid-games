@@ -84,7 +84,7 @@ spec = [
 ]
 
 @numba.experimental.jitclass(spec)
-class BMBoardNumba:
+class BMBoard:
     def __init__(self, board_width=9, start_health=3, start_ammo=3):
         self.board_width = board_width
         self.board_shape = np.array([self.board_width, self.board_width], dtype=np.int_)
@@ -103,7 +103,7 @@ class BMBoardNumba:
         self.ammo_board = np.zeros((self.board_width, self.board_width), dtype=np.int_)
         self.powerup_board = np.zeros((self.board_width, self.board_width), dtype=np.int_)
 
-        self._n_blocks = 20
+        self._n_blocks = (board_width**2)//2
 
         self._bomb_life = 4
         self._fire_life = 2
