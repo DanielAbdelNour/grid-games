@@ -37,10 +37,13 @@ class Node:
         return len(self.children) > 0
     
 # %%
-# game = BMBoard(3)
-# root = Node(game.board_state)
+def update_uct(children):
+    for c in children:
+        c.uct = c.value + np.sqrt(2*np.log(c.parent.visit_count)/c.visit_count)
+        if c.has_children:
+            update_uct(c.children)
 
-# %%
+
 def run(game, root, n=1000):
     for _ in range(n):
         current_node = root
@@ -103,12 +106,6 @@ def run(game, root, n=1000):
             parent = parent.parent
 
         # recalculate uct
-        def update_uct(children):
-            for c in children:
-                c.uct = c.value + np.sqrt(2*np.log(c.parent.visit_count)/c.visit_count)
-                if c.has_children:
-                    update_uct(c.children)
-
         update_uct(root.children)
 
     best_child_idx = np.argmax([c.visit_count for c in root.children])
